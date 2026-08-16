@@ -1,4 +1,4 @@
-name: Build SmartPDFReader V3.1
+name: Build SmartPDFReader V3.2
 
 on:
   workflow_dispatch:
@@ -75,15 +75,24 @@ jobs:
                   applicationId 'com.smartpdfreader'
                   minSdk 26
                   targetSdk 35
-                  versionCode 2
-                  versionName '3.1'
+                  versionCode 3
+                  versionName '3.2'
               }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.activity:activity:1.9.3'
           }
           EOF
 
           cat > project/app/src/main/res/values/strings.xml <<'EOF'
           <resources>
-              <string name="app_name">Smart PDF Reader V3.1</string>
+              <string name="app_name">Smart PDF Reader V3.2</string>
           </resources>
           EOF
 
@@ -103,7 +112,8 @@ jobs:
               <application
                   android:theme="@style/AppTheme"
                   android:label="@string/app_name"
-                  android:allowBackup="true">
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
 
                   <activity
                       android:name=".MainActivity"
@@ -126,85 +136,307 @@ jobs:
 
           import android.app.Activity;
           import android.os.Bundle;
-          import android.content.Intent;
+          import android.os.ParcelFileDescriptor;
+          import android.graphics.Bitmap;
+          import android.graphics.Color;
+          import android.graphics.pdf.PdfRenderer;
           import android.net.Uri;
+          import android.content.Intent;
           import android.view.Gravity;
+          import android.view.ViewGroup;
           import android.widget.Button;
+          import android.widget.ImageView;
           import android.widget.LinearLayout;
           import android.widget.TextView;
+          import android.widget.Toast;
 
-          public class MainActivity extends Activity {
+          import androidx.activity.ComponentActivity;
+          import androidx.activity.result.ActivityResultLauncher;
+          import androidx.activity.result.contract.ActivityResultContracts;
 
-              private static final int PICK_PDF = 100;
+          import java.io.IOException;
+
+          public class MainActivity extends ComponentActivity {
+
+              private ImageView pageView;
+              private TextView pageNumber;
+              private Button previousButton;
+              private Button nextButton;
+
+              private PdfRenderer renderer;
+              private PdfRenderer.Page currentPage;
+              private ParcelFileDescriptor fileDescriptor;
+
+              private int pageIndex = 0;
+              private Uri pdfUri;
+
+              private final ActivityResultLauncher<Intent> pdfPicker =
+                      registerForActivityResult(
+                              new ActivityResultContracts.StartActivityForResult(),
+                              result -> {
+                                  if (result.getResultCode() == Activity.RESULT_OK
+                                          && result.getData() != null
+                                          && result.getData().getData() != null) {
+
+                                      Uri uri = result.getData().getData();
+
+                                      try {
+                                          getContentResolver().takePersistableUriPermission(
+                                                  uri,
+                                                  Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                          );
+                                      } catch (Exception ignored) {
+                                      }
+
+                                      getPreferences(MODE_PRIVATE)
+                                              .edit()
+                                              .putString("pdf_uri", uri.toString())
+                                              .apply();
+
+                                      openPdf(uri);
+                                  }
+                              }
+                      );
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  LinearLayout layout = new LinearLayout(this);
-                  layout.setOrientation(LinearLayout.VERTICAL);
-                  layout.setGravity(Gravity.CENTER);
-                  layout.setPadding(40, 40, 40, 40);
+                  buildInterface();
 
-                  TextView title = new TextView(this);
-                  title.setText("Smart PDF Reader V3.1");
-                  title.setTextSize(26);
-                  title.setGravity(Gravity.CENTER);
+                  String savedUri =
+                          getPreferences(MODE_PRIVATE)
+                                  .getString("pdf_uri", null);
+
+                  if (savedUri != null) {
+                      try {
+                          openPdf(Uri.parse(savedUri));
+                      } catch (Exception e) {
+                          Toast.makeText(
+                                  this,
+                                  "Previous PDF is no longer available",
+                                  Toast.LENGTH_LONG
+                          ).show();
+                      }
+                  }
+              }
+
+              private void buildInterface() {
+
+                  LinearLayout root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setBackgroundColor(Color.WHITE);
+
+                  LinearLayout toolbar = new LinearLayout(this);
+                  toolbar.setGravity(Gravity.CENTER_VERTICAL);
+                  toolbar.setPadding(12, 8, 12, 8);
 
                   Button openButton = new Button(this);
                   openButton.setText("Open PDF");
 
-                  TextView result = new TextView(this);
-                  result.setText("");
-                  result.setTextSize(18);
-                  result.setGravity(Gravity.CENTER);
-                  result.setPadding(0, 30, 0, 0);
+                  previousButton = new Button(this);
+                  previousButton.setText("‹");
 
-                  layout.addView(title);
-                  layout.addView(openButton);
-                  layout.addView(result);
+                  nextButton = new Button(this);
+                  nextButton.setText("›");
 
-                  setContentView(layout);
+                  pageNumber = new TextView(this);
+                  pageNumber.setText("No PDF");
+                  pageNumber.setTextSize(16);
+                  pageNumber.setGravity(Gravity.CENTER);
 
-                  openButton.setOnClickListener(v -> {
-                      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                      intent.addCategory(Intent.CATEGORY_OPENABLE);
-                      intent.setType("application/pdf");
-                      startActivityForResult(intent, PICK_PDF);
+                  toolbar.addView(
+                          openButton,
+                          new LinearLayout.LayoutParams(
+                                  0,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT,
+                                  1
+                          )
+                  );
+
+                  toolbar.addView(
+                          previousButton,
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.WRAP_CONTENT,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          )
+                  );
+
+                  toolbar.addView(
+                          pageNumber,
+                          new LinearLayout.LayoutParams(
+                                  0,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT,
+                                  1
+                          )
+                  );
+
+                  toolbar.addView(
+                          nextButton,
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.WRAP_CONTENT,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          )
+                  );
+
+                  pageView = new ImageView(this);
+                  pageView.setBackgroundColor(Color.WHITE);
+                  pageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+                  root.addView(
+                          toolbar,
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          )
+                  );
+
+                  root.addView(
+                          pageView,
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  0,
+                                  1
+                          )
+                  );
+
+                  setContentView(root);
+
+                  openButton.setOnClickListener(v -> choosePdf());
+
+                  previousButton.setOnClickListener(v -> {
+                      if (renderer != null && pageIndex > 0) {
+                          showPage(pageIndex - 1);
+                      }
+                  });
+
+                  nextButton.setOnClickListener(v -> {
+                      if (renderer != null
+                              && pageIndex < renderer.getPageCount() - 1) {
+                          showPage(pageIndex + 1);
+                      }
                   });
               }
 
-              @Override
-              protected void onActivityResult(
-                      int requestCode,
-                      int resultCode,
-                      Intent data) {
+              private void choosePdf() {
 
-                  super.onActivityResult(requestCode, resultCode, data);
+                  Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                  intent.addCategory(Intent.CATEGORY_OPENABLE);
+                  intent.setType("application/pdf");
+                  intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                  intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
-                  if (requestCode == PICK_PDF &&
-                      resultCode == RESULT_OK &&
-                      data != null &&
-                      data.getData() != null) {
+                  pdfPicker.launch(intent);
+              }
 
-                      Uri uri = data.getData();
+              private void openPdf(Uri uri) {
 
-                      TextView result = new TextView(this);
-                      result.setText("PDF selected successfully");
-                      result.setTextSize(18);
-                      result.setGravity(Gravity.CENTER);
-                      result.setPadding(0, 30, 0, 0);
+                  closePdf();
 
-                      ((LinearLayout) findViewById(android.R.id.content)
-                              .getRootView())
-                              .invalidate();
+                  try {
+                      fileDescriptor =
+                              getContentResolver()
+                                      .openFileDescriptor(uri, "r");
 
-                      android.widget.Toast.makeText(
+                      if (fileDescriptor == null) {
+                          throw new IOException("Unable to open PDF");
+                      }
+
+                      renderer = new PdfRenderer(fileDescriptor);
+                      pdfUri = uri;
+                      pageIndex = 0;
+
+                      showPage(0);
+
+                  } catch (Exception e) {
+
+                      closePdf();
+
+                      Toast.makeText(
                               this,
-                              "PDF selected",
-                              android.widget.Toast.LENGTH_SHORT
+                              "Could not open PDF",
+                              Toast.LENGTH_LONG
                       ).show();
                   }
+              }
+
+              private void showPage(int index) {
+
+                  if (renderer == null) {
+                      return;
+                  }
+
+                  if (index < 0 || index >= renderer.getPageCount()) {
+                      return;
+                  }
+
+                  if (currentPage != null) {
+                      currentPage.close();
+                      currentPage = null;
+                  }
+
+                  currentPage = renderer.openPage(index);
+                  pageIndex = index;
+
+                  int width = currentPage.getWidth();
+                  int height = currentPage.getHeight();
+
+                  float scale = 2.0f;
+
+                  Bitmap bitmap = Bitmap.createBitmap(
+                          (int) (width * scale),
+                          (int) (height * scale),
+                          Bitmap.Config.ARGB_8888
+                  );
+
+                  bitmap.eraseColor(Color.WHITE);
+
+                  currentPage.render(
+                          bitmap,
+                          null,
+                          null,
+                          PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+                  );
+
+                  pageView.setImageBitmap(bitmap);
+
+                  pageNumber.setText(
+                          "Page " + (index + 1)
+                                  + " / "
+                                  + renderer.getPageCount()
+                  );
+
+                  previousButton.setEnabled(index > 0);
+                  nextButton.setEnabled(
+                          index < renderer.getPageCount() - 1
+                  );
+              }
+
+              private void closePdf() {
+
+                  if (currentPage != null) {
+                      currentPage.close();
+                      currentPage = null;
+                  }
+
+                  if (renderer != null) {
+                      renderer.close();
+                      renderer = null;
+                  }
+
+                  if (fileDescriptor != null) {
+                      try {
+                          fileDescriptor.close();
+                      } catch (IOException ignored) {
+                      }
+                      fileDescriptor = null;
+                  }
+              }
+
+              @Override
+              protected void onDestroy() {
+                  closePdf();
+                  super.onDestroy();
               }
           }
           EOF
@@ -220,5 +452,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SmartPDFReader-V3.1-debug
+          name: SmartPDFReader-V3.2-debug
           path: project/app/build/outputs/apk/debug/app-debug.apk
