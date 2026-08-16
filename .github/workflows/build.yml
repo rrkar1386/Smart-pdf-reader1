@@ -2,7 +2,9 @@ name: Build Smart PDF Reader V3.3
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+
   workflow_dispatch:
 
 jobs:
@@ -10,132 +12,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create project files
-        shell: bash
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2'
+
+      - name: Build Debug APK
         run: |
-          set -e
-          mkdir -p app/src/main/java/com/smartpdfreader
-          mkdir -p app/src/main/res/values
+          gradle :app:assembleDebug --no-daemon --stacktrace
 
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
+      - name: Verify APK
+        run: |
+          ls -lh app/build/outputs/apk/debug/
+          test -f app/build/outputs/apk/debug/app-debug.apk
 
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "SmartPDFReaderV33"
-          include(":app")
-          EOF
-
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          EOF
-
-          cat > gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          EOF
-
-          cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.smartpdfreader'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.smartpdfreader.v33'
-                  minSdk 24
-                  targetSdk 35
-                  versionCode 33
-                  versionName "3.3"
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.7.0'
-              implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
-          }
-          EOF
-
-          cat > app/src/main/res/values/strings.xml <<'EOF'
-          <resources>
-              <string name="app_name">Smart PDF Reader V3.3</string>
-          </resources>
-          EOF
-
-          cat > app/src/main/res/values/themes.xml <<'EOF'
-          <resources>
-              <style name="Theme.SmartPDFReader"
-                  parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#37474F</item>
-                  <item name="android:statusBarColor">#222222</item>
-                  <item name="android:navigationBarColor">#222222</item>
-              </style>
-          </resources>
-          EOF
-
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <application
-                  android:theme="@style/Theme.SmartPDFReader"
-                  android:label="@string/app_name"
-                  android:allowBackup="false"
-                  android:supportsRtl="true">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:screenOrientation="portrait"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-
-                  </activity>
-
-              </application>
-
-          </manifest>
-          EOF
-
-          cat > app/src/main/java/com/smartpdfreader/ReadingLine.java <<'EOF'
-          package com.smartpdfreader;
-
-          class ReadingLine {
-
-              String text;
-              float xMin;
-              float xMax;
-              float yTop;
-              float yBottom;
-              float fontSize;
-
-              ReadingLine(
-                      String text,
-                      float xMin,
-                      float xMax,
-                      float yTop,
-                      float yBottom,
-                      float fontSize)
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartPDFReader-V3.3-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
