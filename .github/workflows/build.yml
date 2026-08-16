@@ -1,10 +1,9 @@
-name: Build Smart PDF Reader V3.2
+name: Build Smart PDF Reader V3.3
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,27 +13,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Create Android project
+      - name: Create project files
         shell: bash
         run: |
-          rm -rf project
+          set -e
+          mkdir -p app/src/main/java/com/smartpdfreader
+          mkdir -p app/src/main/res/values
 
-          mkdir -p project/app/src/main/java/com/smartpdfreader/v32
-          mkdir -p project/app/src/main/res/layout
-          mkdir -p project/app/src/main/res/values
-
-          cat > project/settings.gradle <<'EOF'
+          cat > settings.gradle <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -51,180 +37,75 @@ jobs:
               }
           }
 
-          rootProject.name = "SmartPDFReader"
+          rootProject.name = "SmartPDFReaderV33"
           include(":app")
           EOF
 
-          cat > project/build.gradle <<'EOF'
+          cat > build.gradle <<'EOF'
           plugins {
-              id 'com.android.application' version '8.6.1' apply false
+              id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          cat > project/gradle.properties <<'EOF'
-          android.useAndroidX=true
-          android.nonTransitiveRClass=true
+          cat > gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
           EOF
 
-          cat > project/app/build.gradle <<'EOF'
+          cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace 'com.smartpdfreader.v32'
+              namespace 'com.smartpdfreader'
               compileSdk 35
 
               defaultConfig {
-                  applicationId 'com.smartpdfreader.v32'
-                  minSdk 23
+                  applicationId 'com.smartpdfreader.v33'
+                  minSdk 24
                   targetSdk 35
-                  versionCode 32
-                  versionName "3.2"
+                  versionCode 33
+                  versionName "3.3"
               }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
           }
           EOF
 
-          cat > project/app/src/main/res/values/strings.xml <<'EOF'
+          cat > app/src/main/res/values/strings.xml <<'EOF'
           <resources>
-              <string name="app_name">Smart PDF Reader V3.2</string>
+              <string name="app_name">Smart PDF Reader V3.3</string>
           </resources>
           EOF
 
-          cat > project/app/src/main/res/values/colors.xml <<'EOF'
+          cat > app/src/main/res/values/themes.xml <<'EOF'
           <resources>
-              <color name="black">#000000</color>
-              <color name="white">#FFFFFF</color>
-              <color name="background">#F5F5F5</color>
-          </resources>
-          EOF
-
-          cat > project/app/src/main/res/values/themes.xml <<'EOF'
-          <resources>
-              <style name="AppTheme"
-                  parent="android:style/Theme.Material.Light.NoActionBar">
+              <style name="Theme.SmartPDFReader"
+                  parent="Theme.AppCompat.Light.NoActionBar">
                   <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#444444</item>
-                  <item name="android:navigationBarColor">#000000</item>
-                  <item name="android:statusBarColor">#FFFFFF</item>
-                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:colorAccent">#37474F</item>
+                  <item name="android:statusBarColor">#222222</item>
+                  <item name="android:navigationBarColor">#222222</item>
               </style>
           </resources>
           EOF
 
-          cat > project/app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <LinearLayout
-              xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp"
-              android:background="#F5F5F5">
-
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Smart PDF Reader V3.2"
-                  android:textSize="28sp"
-                  android:textColor="#333333"
-                  android:layout_marginBottom="32dp"/>
-
-              <Button
-                  android:id="@+id/openPdfButton"
-                  android:layout_width="match_parent"
-                  android:layout_height="56dp"
-                  android:text="OPEN PDF"
-                  android:textSize="17sp"/>
-
-          </LinearLayout>
-          EOF
-
-          cat > project/app/src/main/res/layout/activity_reader.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <LinearLayout
-              xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:background="#202020">
-
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="56dp"
-                  android:orientation="horizontal"
-                  android:gravity="center_vertical"
-                  android:paddingStart="8dp"
-                  android:paddingEnd="8dp"
-                  android:background="#303030">
-
-                  <Button
-                      android:id="@+id/previousButton"
-                      android:layout_width="0dp"
-                      android:layout_height="48dp"
-                      android:layout_weight="1"
-                      android:text="PREVIOUS"/>
-
-                  <TextView
-                      android:id="@+id/pageText"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:gravity="center"
-                      android:text="Page 1"
-                      android:textColor="#FFFFFF"
-                      android:textSize="16sp"/>
-
-                  <Button
-                      android:id="@+id/nextButton"
-                      android:layout_width="0dp"
-                      android:layout_height="48dp"
-                      android:layout_weight="1"
-                      android:text="NEXT"/>
-
-              </LinearLayout>
-
-              <ScrollView
-                  android:id="@+id/scrollView"
-                  android:layout_width="match_parent"
-                  android:layout_height="0dp"
-                  android:layout_weight="1"
-                  android:fillViewport="true">
-
-                  <ImageView
-                      android:id="@+id/pageImage"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:adjustViewBounds="true"
-                      android:scaleType="fitCenter"
-                      android:background="#FFFFFF"/>
-
-              </ScrollView>
-
-          </LinearLayout>
-          EOF
-
-          cat > project/app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <application
-                  android:theme="@style/AppTheme"
+                  android:theme="@style/Theme.SmartPDFReader"
                   android:label="@string/app_name"
-                  android:allowBackup="true"
+                  android:allowBackup="false"
                   android:supportsRtl="true">
 
                   <activity
-                      android:name=".ReaderActivity"
-                      android:exported="false"/>
-
-                  <activity
                       android:name=".MainActivity"
+                      android:screenOrientation="portrait"
                       android:exported="true">
 
                       <intent-filter>
@@ -239,236 +120,22 @@ jobs:
           </manifest>
           EOF
 
-          cat > project/app/src/main/java/com/smartpdfreader/v32/MainActivity.java <<'EOF'
-          package com.smartpdfreader.v32;
+          cat > app/src/main/java/com/smartpdfreader/ReadingLine.java <<'EOF'
+          package com.smartpdfreader;
 
-          import android.app.Activity;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Bundle;
-          import android.widget.Button;
+          class ReadingLine {
 
-          public class MainActivity extends Activity {
+              String text;
+              float xMin;
+              float xMax;
+              float yTop;
+              float yBottom;
+              float fontSize;
 
-              private static final int PICK_PDF = 1001;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-
-                  Button openButton = findViewById(R.id.openPdfButton);
-
-                  openButton.setOnClickListener(v -> {
-                      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                      intent.addCategory(Intent.CATEGORY_OPENABLE);
-                      intent.setType("application/pdf");
-                      intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                      intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                      startActivityForResult(intent, PICK_PDF);
-                  });
-              }
-
-              @Override
-              protected void onActivityResult(
-                      int requestCode,
-                      int resultCode,
-                      Intent data) {
-
-                  super.onActivityResult(requestCode, resultCode, data);
-
-                  if (requestCode == PICK_PDF
-                          && resultCode == RESULT_OK
-                          && data != null
-                          && data.getData() != null) {
-
-                      Uri uri = data.getData();
-
-                      try {
-                          getContentResolver().takePersistableUriPermission(
-                                  uri,
-                                  Intent.FLAG_GRANT_READ_URI_PERMISSION
-                          );
-                      } catch (Exception ignored) {
-                      }
-
-                      Intent readerIntent =
-                              new Intent(this, ReaderActivity.class);
-
-                      readerIntent.setData(uri);
-                      startActivity(readerIntent);
-                  }
-              }
-          }
-          EOF
-
-          cat > project/app/src/main/java/com/smartpdfreader/v32/ReaderActivity.java <<'EOF'
-          package com.smartpdfreader.v32;
-
-          import android.app.Activity;
-          import android.graphics.Bitmap;
-          import android.graphics.Color;
-          import android.graphics.pdf.PdfRenderer;
-          import android.os.Bundle;
-          import android.os.ParcelFileDescriptor;
-          import android.net.Uri;
-          import android.widget.Button;
-          import android.widget.ImageView;
-          import android.widget.TextView;
-
-          import java.io.File;
-          import java.io.FileOutputStream;
-          import java.io.InputStream;
-
-          public class ReaderActivity extends Activity {
-
-              private PdfRenderer renderer;
-              private PdfRenderer.Page currentPage;
-              private ImageView pageImage;
-              private TextView pageText;
-              private Button previousButton;
-              private Button nextButton;
-              private int pageNumber = 0;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_reader);
-
-                  pageImage = findViewById(R.id.pageImage);
-                  pageText = findViewById(R.id.pageText);
-                  previousButton = findViewById(R.id.previousButton);
-                  nextButton = findViewById(R.id.nextButton);
-
-                  previousButton.setOnClickListener(v -> showPage(pageNumber - 1));
-                  nextButton.setOnClickListener(v -> showPage(pageNumber + 1));
-
-                  Uri uri = getIntent().getData();
-
-                  if (uri == null) {
-                      finish();
-                      return;
-                  }
-
-                  try {
-                      openPdf(uri);
-                      showPage(0);
-                  } catch (Exception e) {
-                      pageText.setText("Unable to open PDF");
-                  }
-              }
-
-              private void openPdf(Uri uri) throws Exception {
-
-                  File file = new File(
-                          getCacheDir(),
-                          "selected_document.pdf"
-                  );
-
-                  try (
-                          InputStream input =
-                                  getContentResolver().openInputStream(uri);
-                          FileOutputStream output =
-                                  new FileOutputStream(file)
-                  ) {
-
-                      byte[] buffer = new byte[8192];
-                      int length;
-
-                      while ((length = input.read(buffer)) != -1) {
-                          output.write(buffer, 0, length);
-                      }
-                  }
-
-                  ParcelFileDescriptor descriptor =
-                          ParcelFileDescriptor.open(
-                                  file,
-                                  ParcelFileDescriptor.MODE_READ_ONLY
-                          );
-
-                  renderer = new PdfRenderer(descriptor);
-              }
-
-              private void showPage(int number) {
-
-                  if (renderer == null) {
-                      return;
-                  }
-
-                  if (number < 0 || number >= renderer.getPageCount()) {
-                      return;
-                  }
-
-                  if (currentPage != null) {
-                      currentPage.close();
-                  }
-
-                  currentPage = renderer.openPage(number);
-                  pageNumber = number;
-
-                  int width = getResources()
-                          .getDisplayMetrics()
-                          .widthPixels;
-
-                  float ratio =
-                          (float) currentPage.getHeight()
-                                  / currentPage.getWidth();
-
-                  int height = (int) (width * ratio);
-
-                  Bitmap bitmap = Bitmap.createBitmap(
-                          width,
-                          height,
-                          Bitmap.Config.ARGB_8888
-                  );
-
-                  bitmap.eraseColor(Color.WHITE);
-
-                  currentPage.render(
-                          bitmap,
-                          null,
-                          null,
-                          PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
-                  );
-
-                  pageImage.setImageBitmap(bitmap);
-
-                  pageText.setText(
-                          "Page "
-                                  + (pageNumber + 1)
-                                  + " / "
-                                  + renderer.getPageCount()
-                  );
-
-                  previousButton.setEnabled(pageNumber > 0);
-                  nextButton.setEnabled(
-                          pageNumber < renderer.getPageCount() - 1
-                  );
-              }
-
-              @Override
-              protected void onDestroy() {
-
-                  if (currentPage != null) {
-                      currentPage.close();
-                  }
-
-                  if (renderer != null) {
-                      renderer.close();
-                  }
-
-                  super.onDestroy();
-              }
-          }
-          EOF
-
-      - name: Build APK
-        working-directory: project
-        run: |
-          gradle assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SmartPDFReader-V3.2-debug
-          path: project/app/build/outputs/apk/debug/app-debug.apk
+              ReadingLine(
+                      String text,
+                      float xMin,
+                      float xMax,
+                      float yTop,
+                      float yBottom,
+                      float fontSize)
