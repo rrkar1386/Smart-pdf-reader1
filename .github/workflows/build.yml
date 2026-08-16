@@ -1,0 +1,159 @@
+name: Build SmartPDFReader V3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Create Android project
+        run: |
+          mkdir -p project/app/src/main/java/com/smartpdfreader
+          mkdir -p project/app/src/main/res/layout
+          mkdir -p project/app/src/main/res/values
+
+          cat > project/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "SmartPDFReader"
+          include(":app")
+          EOF
+
+          cat > project/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > project/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat > project/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.smartpdfreader'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.smartpdfreader'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName '3.0'
+              }
+          }
+          EOF
+
+          cat > project/app/src/main/res/values/strings.xml <<'EOF'
+          <resources>
+              <string name="app_name">Smart PDF Reader</string>
+          </resources>
+          EOF
+
+          cat > project/app/src/main/res/values/themes.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#555555</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > project/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:theme="@style/AppTheme"
+                  android:label="@string/app_name"
+                  android:allowBackup="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > project/app/src/main/java/com/smartpdfreader/MainActivity.java <<'EOF'
+          package com.smartpdfreader;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.widget.TextView;
+
+          public class MainActivity extends Activity {
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  TextView textView = new TextView(this);
+                  textView.setText("Smart PDF Reader V3");
+                  textView.setTextSize(24);
+                  textView.setPadding(40, 40, 40, 40);
+
+                  setContentView(textView);
+              }
+          }
+          EOF
+
+          cd project
+          gradle wrapper --gradle-version 8.9
+          chmod +x gradlew
+
+      - name: Build APK
+        working-directory: project
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartPDFReader-V3-debug
+          path: project/app/build/outputs/apk/debug/app-debug.apk
